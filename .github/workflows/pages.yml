@@ -1,0 +1,64 @@
+name: Publish Stillmotion
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Import the deployed Stillmotion files
+        if: ${{ hashFiles('site/index.html') == '' }}
+        shell: bash
+        run: |
+          origin=https://stillmotion-gif-studio.duck-mango1.chatgpt.site
+          mkdir -p site/fonts
+          download() {
+            curl --fail --silent --show-error --retry 2 --max-time 30 "$origin/$1" -o "$2"
+          }
+          download '' site/index.html
+          grep -Fq 'Stillmotion' site/index.html
+          grep -Eq 'src="(\./)?app\.js"' site/index.html
+          for file in app.js theme.js gif.js motion.js montage.js caption.js style.css sample.jpg \
+            fonts/fredoka-one.woff2 fonts/titan-one.woff2 fonts/lexend-black.woff2 fonts/comic-neue.ttf; do
+            download "$file" "site/$file"
+          done
+          for file in site/*.js; do
+            node --input-type=module --check < "$file"
+          done
+          grep -Fq '@font-face' site/style.css
+          file site/sample.jpg | grep -Fq JPEG
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add site
+          git commit -m 'Import Stillmotion static site'
+          git push origin HEAD:main
+      - name: Upload the static site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
