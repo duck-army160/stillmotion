@@ -30,14 +30,18 @@
       <section><h2>Export settings</h2>
         <label class="range-label" for="duration">Duration <output id="durationValue"></output></label>
         <input id="duration" type="range" min="0.5" max="8" step="0.1" value="2.9">
-        <div class="selects"><label>Size<select id="size"><option value="480">480 px</option><option value="320">320 px</option><option value="640">640 px</option><option value="960">960 px</option><option value="0">Up to 1920 px</option></select></label><label>Loop<select id="loop"><option value="0">Forever</option><option value="1">Once</option><option value="3">3 times</option></select></label></div>
+        <div class="selects"><label>Size<select id="size"><option value="480">480 px</option><option value="320">320 px</option><option value="640">640 px</option><option value="960">960 px</option><option value="0">Up to 1920 px</option></select></label><label>Loop<select id="loop"><option value="0">Forever</option><option value="1">Once</option><option value="3">3 times</option></select></label>
+          <label>Max file size<select id="maxSize"><option value="1">1 MB</option><option value="2">2 MB</option><option value="5">5 MB</option><option value="10" selected>10 MB</option><option value="20">20 MB</option><option value="25">25 MB</option><option value="50">50 MB</option></select></label>
+          <label>FPS<select id="fps"><option>5</option><option>8</option><option selected>10</option><option>12</option><option>15</option><option>20</option><option>24</option><option>25</option><option>30</option><option>40</option><option>50</option></select></label>
+          <label class="compression-setting">Compression<select id="compression"><option value="detail">Keep more detail</option><option value="balanced">Balance detail and size</option><option value="compact">Make the file smaller</option></select></label>
+        </div>
       </section>
     </aside>
     <section class="panel preview">
       <div class="preview-title"><h2>Live preview</h2><span id="presetBadge"></span></div>
       <div class="stage"><canvas id="canvas" width="480" height="320" aria-label="Animated GIF preview"></canvas></div>
       <div class="transport"><button id="play" aria-label="Pause preview">Ⅱ</button><input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Preview position"><span id="time"></span></div>
-      <div class="export"><div><strong>GIF export · 10 MB max</strong><small id="details"></small></div><button id="download">Download GIF</button></div>
+      <div class="export"><div><strong id="exportLimitLabel">GIF export · 10 MB max</strong><small id="details"></small></div><button id="download">Download GIF</button></div>
       <p id="status" role="status" hidden></p>
     </section>
   </div>

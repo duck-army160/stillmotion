@@ -1,10 +1,24 @@
+const compressionModes = {
+  detail: {redBits: 3, greenBits: 3, blueBits: 2, dither: 1},
+  balanced: {redBits: 2, greenBits: 2, blueBits: 2, dither: .45},
+  compact: {redBits: 2, greenBits: 1, blueBits: 1, dither: 0}
+};
+
 export class Gif {
-  constructor(width, height, plays, transparent = false) {
+  constructor(width, height, plays, transparent = false, compression = 'detail') {
     this.parts = [];
     this.byteLength = 0;
     this.width = width;
     this.height = height;
     this.transparent = transparent;
+    const {redBits, greenBits, blueBits, dither} = compressionModes[compression];
+    this.codeBits = redBits + greenBits + blueBits;
+    this.redShift = greenBits + blueBits;
+    this.greenShift = blueBits;
+    this.redMax = (1 << redBits) - 1;
+    this.greenMax = (1 << greenBits) - 1;
+    this.blueMax = (1 << blueBits) - 1;
+    this.dither = dither;
     this.add(...new TextEncoder().encode('GIF89a'), ...this.word(width), ...this.word(height), transparent ? 0xf0 : 0x70, 0, 0);
     if (transparent) this.add(0, 0, 0, 0, 0, 0);
     if (plays !== 1) {
@@ -27,23 +41,24 @@ export class Gif {
 
   frame(pixels, delay, brightness = 1) {
     this.add(0x21, 0xf9, 4, this.transparent ? 9 : 4, ...this.word(delay), 0, 0,
-      0x2c, 0, 0, 0, 0, ...this.word(this.width), ...this.word(this.height), 0x87);
-    const palette = new Uint8Array(768);
-    for (let i = 0; i < 256; i++) {
-      palette[i * 3] = Math.round((i >> 5) * 255 * brightness / 7);
-      palette[i * 3 + 1] = Math.round(((i >> 2) & 7) * 255 * brightness / 7);
-      palette[i * 3 + 2] = Math.round((i & 3) * 255 * brightness / 3);
+      0x2c, 0, 0, 0, 0, ...this.word(this.width), ...this.word(this.height), 0x80 | (this.codeBits - 1));
+    const colors = 1 << this.codeBits;
+    const palette = new Uint8Array(colors * 3);
+    for (let i = 0; i < colors; i++) {
+      palette[i * 3] = Math.round((i >> this.redShift) * 255 * brightness / this.redMax);
+      palette[i * 3 + 1] = Math.round(((i >> this.greenShift) & this.greenMax) * 255 * brightness / this.greenMax);
+      palette[i * 3 + 2] = Math.round((i & this.blueMax) * 255 * brightness / this.blueMax);
     }
     if (this.transparent) palette[5] = 0;
     this.append(palette);
     if (brightness === 0) {
-      this.blackFrame ??= compress(new Uint8Array(this.width * this.height));
+      this.blackFrame ??= compress(new Uint8Array(this.width * this.height), this.codeBits);
     } else if (pixels !== this.previousPixels) {
-      this.imageFrame = compress(quantize(pixels, this.width, this.transparent));
+      this.imageFrame = compress(quantize(pixels, this), this.codeBits);
       this.previousPixels = pixels;
     }
     const compressed = brightness === 0 ? this.blackFrame : this.imageFrame;
-    this.add(8);
+    this.add(this.codeBits);
     for (let offset = 0; offset < compressed.length; offset += 255) {
       const block = compressed.subarray(offset, offset + 255);
       this.add(block.length);
@@ -58,27 +73,31 @@ export class Gif {
   }
 }
 
-function quantize(pixels, width, transparent) {
+function quantize(pixels, {width, transparent, redMax, greenMax, blueMax, redShift, greenShift, dither}) {
   const indices = new Uint8Array(pixels.length / 4);
   const pattern = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
   for (let i = 0; i < indices.length; i++) {
-    const dither = (pattern[(((i / width) | 0) & 3) * 4 + ((i % width) & 3)] + .5) / 16;
+    const threshold = (pattern[(((i / width) | 0) & 3) * 4 + ((i % width) & 3)] + .5) / 16;
+    const offset = .5 + (threshold - .5) * dither;
     const p = i * 4;
     if (transparent && pixels[p + 3] < 128) continue;
-    const red = Math.floor(pixels[p] * 7 / 255 + dither);
-    const green = Math.floor(pixels[p + 1] * 7 / 255 + dither);
-    const blue = Math.floor(pixels[p + 2] * 3 / 255 + dither);
-    const index = (red << 5) | (green << 2) | blue;
+    const red = Math.floor(pixels[p] * redMax / 255 + offset);
+    const green = Math.floor(pixels[p + 1] * greenMax / 255 + offset);
+    const blue = Math.floor(pixels[p + 2] * blueMax / 255 + offset);
+    const index = (red << redShift) | (green << greenShift) | blue;
     indices[i] = transparent && index < 2 ? index + 1 : index;
   }
   return indices;
 }
 
-function compress(indices) {
+function compress(indices, codeBits) {
   const output = new Uint8Array(indices.length * 2 + 8);
   const lookup = new Map();
-  let size = 9;
-  let next = 258;
+  const clear = 1 << codeBits;
+  const end = clear + 1;
+  const firstCode = end + 1;
+  let size = codeBits + 1;
+  let next = firstCode;
   let position = 0;
   let bits = 0;
   let pending = 0;
@@ -91,7 +110,7 @@ function compress(indices) {
       bits -= 8;
     }
   }
-  write(256);
+  write(clear);
   let prefix = indices[0];
   for (let i = 1; i < indices.length; i++) {
     const suffix = indices[i];
@@ -106,16 +125,16 @@ function compress(indices) {
       if (next === 1 << size) size++;
       lookup.set(key, next++);
     } else {
-      write(256);
+      write(clear);
       lookup.clear();
-      size = 9;
-      next = 258;
+      size = codeBits + 1;
+      next = firstCode;
     }
     prefix = suffix;
   }
   write(prefix);
   if (next === 1 << size && size < 12) size++;
-  write(257);
+  write(end);
   if (bits) output[position++] = pending;
   return output.slice(0, position);
 }

@@ -65,31 +65,29 @@ function timeTotal() {
 
 function timeline() {
   const total = timeTotal();
-  if (effect === 'fade' || effect === 'montage') {
-    let offset = 0;
-    const samples = effect === 'fade' ? referenceBrightness : montageFrames;
-    return samples.map((sample, index) => {
-      const end = Math.round((index + 1) * total / samples.length);
-      const delay = end - offset;
-      offset = end;
-      return effect === 'fade'
-        ? {brightness: sample, delay, end}
-        : {brightness: 1, montage: true, scene: sample, delay, end};
-    });
-  }
   const frames = [];
   const spatial = is3D(effect);
-  const count = Math.ceil(total / (spatial ? 5 : 7));
+  const count = Math.max(1, Math.round(total * Number($('fps').value) / 100));
+  const flicker = [1, 1, .6, 1, .25, .8, 1, 1, .85, 1, .55];
   let offset = 0;
   for (let i = 0; i < count; i++) {
     const end = Math.round((i + 1) * total / count);
     const p = offset / total;
+    const timing = {delay: end - offset, end};
     let brightness = 1;
     let zoom = 1;
+    if (effect === 'fade') {
+      const sample = i * (referenceBrightness.length - 1) / Math.max(1, count - 1);
+      const low = Math.floor(sample);
+      const high = Math.ceil(sample);
+      brightness = referenceBrightness[low] + (referenceBrightness[high] - referenceBrightness[low]) * (sample - low);
+    }
     if (effect === 'dissolve') brightness = Math.min(1, p * 3.5, (1 - p) * 3.5);
     if (effect === 'zoom') zoom += .22 * Math.sin(Math.PI * p) ** 2;
-    if (effect === 'flicker') brightness = [1, 1, .6, 1, .25, .8, 1, 1, .85, 1, .55][i % 11];
-    frames.push({brightness, zoom, motion: spatial ? effect : null, phase: spatial ? i / count : 0, delay: end - offset, end});
+    if (effect === 'flicker') brightness = flicker[Math.floor(offset / 7) % flicker.length];
+    frames.push(effect === 'montage'
+      ? {brightness, montage: true, scene: montageFrames[Math.floor(i * montageFrames.length / count)], ...timing}
+      : {brightness, zoom, motion: spatial ? effect : null, phase: spatial ? i / count : 0, ...timing});
     offset = end;
   }
   return frames;
@@ -253,6 +251,10 @@ $('demo').onclick = () => setImage();
 $('duration').oninput = () => refresh(true);
 $('size').onchange = () => refresh();
 $('loop').onchange = () => refresh(true);
+$('fps').onchange = () => refresh();
+$('maxSize').onchange = () => {
+  $('exportLimitLabel').textContent = `GIF export · ${$('maxSize').value} MB max`;
+};
 $('play').onclick = () => setPlayback(!playing);
 $('scrub').oninput = () => {
   setPlayback(false);
@@ -304,9 +306,8 @@ if (typeof FontFace !== 'undefined' && document.fonts) {
   }).catch(() => {});
 }
 
-const exportLimit = 10_000_000;
-
-async function encodeWithinLimit(picture, plannedFrames, width, height, plays, layout) {
+async function encodeWithinLimit(picture, plannedFrames, {width, height}, plays, layout, maxSizeMb, compression) {
+  const exportLimit = maxSizeMb * 1_000_000;
   const output = document.createElement('canvas');
   const target = output.getContext('2d', {willReadFrequently: true});
   const scratch = layout && document.createElement('canvas').getContext('2d');
@@ -316,7 +317,7 @@ async function encodeWithinLimit(picture, plannedFrames, width, height, plays, l
     output.width = Math.max(1, Math.round(width * longEdge / originalLongEdge));
     output.height = Math.max(1, Math.round(height * longEdge / originalLongEdge)) + captionHeight(output.width, layout);
     target.imageSmoothingQuality = 'high';
-    const gif = new Gif(output.width, output.height, plays, Boolean(plannedFrames[0].motion));
+    const gif = new Gif(output.width, output.height, plays, Boolean(plannedFrames[0].motion), compression);
     let previous;
     let pixels;
     let encoded = 0;
@@ -342,7 +343,7 @@ async function encodeWithinLimit(picture, plannedFrames, width, height, plays, l
     const projectedBytes = gif.byteLength * plannedFrames.length / encoded;
     const scale = Math.min(.99, Math.sqrt(exportLimit / projectedBytes) * .98);
     longEdge = Math.min(longEdge - 1, Math.floor(longEdge * scale));
-    status('Resizing to fit 10 MB…');
+    status(`Resizing to fit ${maxSizeMb} MB…`);
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   throw Error('Could not fit GIF within the export limit.');
@@ -354,10 +355,11 @@ $('download').onclick = async () => {
   exportFont = caption?.font;
   $('download').disabled = true;
   const name = `${sourceName}-${effect}.gif`;
+  const maxSizeMb = Number($('maxSize').value);
   try {
-    const result = await encodeWithinLimit(source, frames, exportSize.width, exportSize.height, Number($('loop').value), caption);
+    const result = await encodeWithinLimit(source, frames, exportSize, Number($('loop').value), caption,
+      maxSizeMb, $('compression').value);
     const {blob, width, height} = result;
-    if (blob.size > exportLimit) throw Error('GIF exceeds the export limit.');
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
