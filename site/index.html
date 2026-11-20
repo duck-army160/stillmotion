@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Turn a still image into a looping GIF with Stillmotion.">
+<title>Stillmotion — GIF Studio</title>
+<script src="theme.js"></script>
+<link rel="stylesheet" href="style.css">
+<header><div class="shell nav"><a class="brand" href="./"><span class="mark">✳</span>stillmotion<span class="dot">.</span></a><label class="appearance" for="theme">Theme <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div></header>
+<main class="shell">
+  <section class="intro"><h1>Still image.<br><em>Moving GIF.</em></h1><p>Turn a photo into a loop. Spin it, wrap it around a sphere, or let it fade in from black.</p></section>
+  <div class="workspace">
+    <aside class="panel settings">
+      <section><h2>Source image</h2>
+      <input id="file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp" hidden>
+      <button id="drop" class="drop"><span class="upload" aria-hidden="true">⇧</span><strong>Click to upload</strong><span>or drag and drop an image</span><small>PNG, JPG, WebP, GIF</small></button>
+      <div class="fileline"><span aria-hidden="true">▧</span><span id="source">Demo image</span><button id="demo" hidden>Use demo</button></div></section>
+      <section><h2>Animation</h2><div id="effects" class="effects" aria-label="Animation presets"></div>
+</section>
+      <section class="caption-settings"><h2>Caption</h2>
+        <label class="caption-toggle"><input id="captionEnabled" type="checkbox"> Add a white caption bar</label>
+        <div id="captionFields" hidden>
+          <label for="captionText">Caption text</label>
+          <textarea id="captionText" rows="2" maxlength="180" placeholder="Type your caption"></textarea>
+          <input id="captionFontFile" type="file" accept=".ttf,.otf,.woff,.woff2" hidden>
+          <button id="captionFontButton" type="button">Use a font file</button>
+          <small id="captionFontStatus" role="status"></small>
+        </div>
+      </section>
+      <section><h2>Export settings</h2>
+        <label class="range-label" for="duration">Duration <output id="durationValue"></output></label>
+        <input id="duration" type="range" min="0.5" max="8" step="0.1" value="2.9">
+        <div class="selects"><label>Size<select id="size"><option value="480">480 px</option><option value="320">320 px</option><option value="640">640 px</option><option value="960">960 px</option><option value="0">Up to 1920 px</option></select></label><label>Loop<select id="loop"><option value="0">Forever</option><option value="1">Once</option><option value="3">3 times</option></select></label></div>
+      </section>
+    </aside>
+    <section class="panel preview">
+      <div class="preview-title"><h2>Live preview</h2><span id="presetBadge"></span></div>
+      <div class="stage"><canvas id="canvas" width="480" height="320" aria-label="Animated GIF preview"></canvas></div>
+      <div class="transport"><button id="play" aria-label="Pause preview">Ⅱ</button><input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Preview position"><span id="time"></span></div>
+      <div class="export"><div><strong>GIF export · 10 MB max</strong><small id="details"></small></div><button id="download">Download GIF</button></div>
+      <p id="status" role="status" hidden></p>
+    </section>
+  </div>
+  <footer><span>Stillmotion</span><span>Images stay on your device.</span></footer>
+</main>
+<script type="module" src="app.js"></script>
+</html>
