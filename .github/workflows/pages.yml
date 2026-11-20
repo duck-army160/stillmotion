@@ -17,28 +17,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      ready: ${{ steps.package.outputs.ready }}
     steps:
       - uses: actions/checkout@v5
-      - name: Import the recovered Stillmotion files
-        if: ${{ hashFiles('stillmotion-source.zip') != '' && hashFiles('site/index.html') == '' }}
-        shell: bash
-        run: |
-          mkdir site
-          unzip -q stillmotion-source.zip -d site
-          test -s site/index.html
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add site
-          git rm stillmotion-source.zip
-          git commit -m 'Restore the original Stillmotion site files'
-          git push origin HEAD:main
       - name: Check the site files
-        id: package
-        if: ${{ hashFiles('site/index.html') != '' }}
         shell: bash
         run: |
           for file in index.html style.css sample.jpg app.js caption.js gif.js montage.js motion.js theme.js \
@@ -48,16 +29,13 @@ jobs:
           for script in site/*.js; do
             node --input-type=module --check < "$script"
           done
-          echo 'ready=true' >> "$GITHUB_OUTPUT"
       - name: Upload the static site
-        if: steps.package.outputs.ready == 'true'
         uses: actions/upload-pages-artifact@v4
         with:
           path: site
 
   deploy:
     needs: build
-    if: needs.build.outputs.ready == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
